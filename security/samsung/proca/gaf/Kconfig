@@ -7,6 +7,7 @@ config GAF
 
 if GAF
 # When adding new entries keep the list in alphabetical order
+# When adding new entries keep the list in alphabetical order
 choice
 	prompt "Version of GAF structure"
 	default GAF_V5 if PROCA
@@ -29,5 +30,4 @@ choice
 		help
 		  Default option for kernel with PROCA 2.2+ LSM module.
 endchoice
-
 endif #GAF
