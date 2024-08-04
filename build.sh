@@ -3,7 +3,7 @@
 PROTON_PATH="/home/itachi/proton"
 
 
-export CROSS_COMPILE="/home/itachi/49/bin/aarch64-linux-android-"
+export CROSS_COMPILE="/home/itachi/linaro/bin/aarch64-linux-gnu-"
 export CC="/home/itachi/proton/bin/clang"
 export CLANG_TRIPLE=aarch64-linux-gnu-
 export ARCH=arm64
