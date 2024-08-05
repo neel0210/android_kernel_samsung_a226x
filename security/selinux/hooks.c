@@ -1803,15 +1803,14 @@ static int cred_has_capability(const struct cred *cred,
 		return -EINVAL;
 	}
 
-	rc = avc_has_perm_noaudit(sid, sid, sclass, av, 0, &avd);
-#ifdef CONFIG_AUDIT
+	rc = avc_has_perm_noaudit(&selinux_state,
+				  sid, sid, sclass, av, 0, &avd);
 	if (audit == SECURITY_CAP_AUDIT) {
 		int rc2 = avc_audit(&selinux_state,
 				    sid, sid, sclass, av, &avd, rc, &ad, 0);
 		if (rc2)
 			return rc2;
 	}
-#endif
 	return rc;
 }
 
@@ -3149,7 +3148,6 @@ static int selinux_inode_follow_link(struct dentry *dentry, struct inode *inode,
 				  rcu ? MAY_NOT_BLOCK : 0);
 }
 
-#ifdef CONFIG_AUDIT
 static noinline int audit_inode_permission(struct inode *inode,
 					   u32 perms, u32 audited, u32 denied,
 					   int result,
@@ -3169,7 +3167,6 @@ static noinline int audit_inode_permission(struct inode *inode,
 		return rc;
 	return 0;
 }
-#endif
 
 static int selinux_inode_permission(struct inode *inode, int mask)
 {
@@ -3180,7 +3177,8 @@ static int selinux_inode_permission(struct inode *inode, int mask)
 	struct inode_security_struct *isec;
 	u32 sid;
 	struct av_decision avd;
-	int rc;
+	int rc, rc2;
+	u32 audited, denied;
 
 	from_access = mask & MAY_ACCESS;
 	mask &= (MAY_READ|MAY_WRITE|MAY_EXEC|MAY_APPEND);
@@ -3201,40 +3199,17 @@ static int selinux_inode_permission(struct inode *inode, int mask)
 	if (IS_ERR(isec))
 		return PTR_ERR(isec);
 
-// [ SEC_SELINUX_PORTING_COMMON
-	/* skip sid == 1(kernel), it means first boot time */
-	if (isec->initialized != 1 && sid != 1) {
-		int count = 5;
+	rc = avc_has_perm_noaudit(&selinux_state,
+				  sid, isec->sid, isec->sclass, perms, 0, &avd);
+	audited = avc_audit_required(perms, &avd, rc,
+				     from_access ? FILE__AUDIT_ACCESS : 0,
+				     &denied);
+	if (likely(!audited))
+		return rc;
 
-		while (count-- > 0) {
-			pr_err("SELinux : inode->i_security is not initialized. waiting...(%d/5)\n", 5-count);
-			udelay(500);
-			if (isec->initialized == 1) {
-				pr_err("SELinux : inode->i_security is INITIALIZED.\n");
-				break;
-			}
-		}
-		if (isec->initialized != 1)
-			pr_err("SELinux : inode->i_security is not initialized. not fixed.\n");
-	}
-// ] SEC_SELINUX_PORTING_COMMON
-
-	rc = avc_has_perm_noaudit(sid, isec->sid, isec->sclass, perms, 0, &avd);
-#ifdef CONFIG_AUDIT
-	{
-		int rc2;
-		u32 audited, denied;
-		audited = avc_audit_required(perms, &avd, rc,
-					     from_access ? FILE__AUDIT_ACCESS : 0,
-					     &denied);
-		if (likely(!audited))
-			return rc;
-
-		rc2 = audit_inode_permission(inode, perms, audited, denied, rc, flags);
-		if (rc2)
-			return rc2;
-	}
-#endif
+	rc2 = audit_inode_permission(inode, perms, audited, denied, rc, flags);
+	if (rc2)
+		return rc2;
 	return rc;
 }
 
